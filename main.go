@@ -73,14 +73,14 @@ func buildBinary(dir, goos, goarch string) {
 	fmt.Printf("Building for %s/%s\n", goos, goarch)
 	path := fmt.Sprintf("%s/%s-%s", dir, goos, goarch)
 	os.Mkdir(path, os.ModePerm)
-	var binaryPath, binaryPathXZ string
+	var binaryFileName string
 	if goos == "windows" {
-		binaryPath = fmt.Sprintf("%s/%s.exe", path, pluginID)
-		binaryPathXZ = fmt.Sprintf("%s/%s.exe.xz", path, pluginID)
+		binaryFileName = pluginID + ".exe"
 	} else {
-		binaryPath = fmt.Sprintf("%s/%s", path, pluginID)
-		binaryPathXZ = fmt.Sprintf("%s/%s.xz", path, pluginID)
+		binaryFileName = pluginID
 	}
+	binaryPath := fmt.Sprintf("%s/%s", path, binaryFileName)
+	binaryPathXZ := fmt.Sprintf("%s/%s.xz", path, binaryFileName)
 	manifestPath := fmt.Sprintf("%s/%s.toml", path, pluginID)
 	shasumPath := fmt.Sprintf("%s.sha256sum", binaryPathXZ)
 
@@ -128,7 +128,8 @@ func buildBinary(dir, goos, goarch string) {
 
 	// Calculate sha256
 	fmt.Printf("calculating sha256sum... ")
-	cmdSha := exec.Command("sha256sum", binaryPathXZ)
+	cmdSha := exec.Command("sha256sum", binaryFileName+".xz")
+	cmdSha.Dir = path
 	out, err = cmdSha.CombinedOutput()
 	if err != nil {
 		fmt.Println("sha failed: ", string(out))
