@@ -53,35 +53,39 @@ func loadManifest() {
 }
 
 func buildPackage() {
-	tempDir, err := ioutil.TempDir("", "iglu-package")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
 	if linuxAmd64 {
-		buildBinary(tempDir, "linux", "amd64")
+		buildBinary(marketplaceRepoDir, "linux", "amd64")
 	}
 	if linuxArm64 {
-		buildBinary(tempDir, "linux", "arm64")
+		buildBinary(marketplaceRepoDir, "linux", "arm64")
 	}
 	if windowsAmd64 {
-		buildBinary(tempDir, "windows", "amd64")
+		buildBinary(marketplaceRepoDir, "windows", "amd64")
 	}
 	if darwinAmd64 {
-		buildBinary(tempDir, "darwin", "amd64")
+		buildBinary(marketplaceRepoDir, "darwin", "amd64")
 	}
 
+	fmt.Println("Done!")
 }
 
-func buildBinary(tempDir, goos, goarch string) {
+func buildBinary(dir, goos, goarch string) {
 	fmt.Printf("Building for %s/%s\n", goos, goarch)
-	path := fmt.Sprintf("%s/%s-%s", tempDir, goos, goarch)
-	binaryPath := fmt.Sprintf("%s/%s", path, pluginID)
-	binaryPathXZ := fmt.Sprintf("%s/%s.xz", path, pluginID)
+	path := fmt.Sprintf("%s/%s-%s", dir, goos, goarch)
+	os.Mkdir(path, os.ModePerm)
+	var binaryPath, binaryPathXZ string
+	if goos == "windows" {
+		binaryPath = fmt.Sprintf("%s/%s.exe", path, pluginID)
+		binaryPathXZ = fmt.Sprintf("%s/%s.exe.xz", path, pluginID)
+	} else {
+		binaryPath = fmt.Sprintf("%s/%s", path, pluginID)
+		binaryPathXZ = fmt.Sprintf("%s/%s.xz", path, pluginID)
+	}
 	manifestPath := fmt.Sprintf("%s/%s.toml", path, pluginID)
+	shasumPath := fmt.Sprintf("%s.sha256sum", binaryPathXZ)
 
 	// Build the binary
+	fmt.Printf("building binary... ")
 	cmd := exec.Command("go", "build", "-o", binaryPath)
 	cmd.Dir = projectPWD
 	env := os.Environ()
@@ -91,19 +95,26 @@ func buildBinary(tempDir, goos, goarch string) {
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Println("Go build failed: ", out)
+		fmt.Println("Go build failed: ", string(out))
 		return
 	}
 
+	// strip the binary
+	fmt.Printf("stripping binary... ")
+	cmdStrip := exec.Command("strip", binaryPath)
+	cmdStrip.Run()
+
 	// Archive the binary (with xz)
-	cmdXz := exec.Command("xz", binaryPath)
+	fmt.Printf("archiving binary... ")
+	cmdXz := exec.Command("xz", "-f", binaryPath)
 	out, err = cmdXz.CombinedOutput()
 	if err != nil {
-		fmt.Println("xz failed: ", out)
+		fmt.Println("xz failed: ", string(out))
 		return
 	}
 
 	// Copy the manifest
+	fmt.Printf("copying manifest... ")
 	manifestData, err := ioutil.ReadFile("./plugin.toml")
 	if err != nil {
 		fmt.Println("loading manifest failed: ", err)
@@ -116,12 +127,20 @@ func buildBinary(tempDir, goos, goarch string) {
 	}
 
 	// Calculate sha256
+	fmt.Printf("calculating sha256sum... ")
 	cmdSha := exec.Command("sha256sum", binaryPathXZ)
 	out, err = cmdSha.CombinedOutput()
 	if err != nil {
-		fmt.Println("sha failed: ", out)
+		fmt.Println("sha failed: ", string(out))
 		return
 	}
+
+	err = ioutil.WriteFile(shasumPath, out, 0644)
+	if err != nil {
+		fmt.Println("saving sha failed: ", string(out))
+		return
+	}
+	fmt.Println("done!")
 
 }
 
