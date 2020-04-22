@@ -1,4 +1,4 @@
-module gitlab.com/group-nacdlow/plugin-packager
+module github.com/Nacdlow/plugin-packager
 
 go 1.14
 
